@@ -213,6 +213,8 @@ The software supports different SDKs for the Lidar:
 |-----|----------|----------------------------------------------------------------------------------|
 | Livox SDK | `LIVOX_SDK2` | Livox SDK version 2 tested with Mid360 and HAP                                   |
 | Ouster SDK | `OUSTER` | Ouster SDK tested with OS-0-64 (ousteros-image-prod-aries-v2.5.3+20240111055903) |
+| Hesai SDK2 | `HESAI` | Hesai SDK2 (PandarXT/GT), enable with `-DMANDEYE_USE_HESAI_SDK2=ON`               |
+| Unitree SDK | `UNITREE` | Unitree unilidar_sdk2 (L2), enable with `-DMANDEYE_USE_UNITREE_SDK=ON`           |
 | Butter Lidar | `BUTTER_LIDAR` | Dummy SDK for documentation and testing purposes                                 |
 
 Those are shared libraries that are loaded at runtime.

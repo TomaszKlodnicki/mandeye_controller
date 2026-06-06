@@ -143,6 +143,18 @@ BaseLidarClientPtr createLidarClient(const std::string& lidarType, const nlohman
 			return nullptr;
 		}
 	}
+	else if(lidarType == "UNITREE")
+	{
+		try
+		{
+			return make_dynamic_client<BaseLidarClient>("libunitree_lib.so", "create_unitree_client", "destroy_unitree_client");
+		}
+		catch(const std::exception& e)
+		{
+			std::cerr << "[UNITREE] " << e.what() << std::endl;
+			return nullptr;
+		}
+	}
 
 	else
 	{

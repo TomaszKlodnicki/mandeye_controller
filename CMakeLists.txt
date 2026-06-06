@@ -32,6 +32,7 @@ set(MANDEYE_USE_OUSTER_SDK OFF CACHE BOOL  "Use Ouster SDK ")
 set(MANDEYE_USE_LIVOX_SDK2 ON CACHE BOOL "Use Livox SDK (HAP/Mid360)")
 set(MANDEYE_USE_SICK OFF CACHE BOOL "Use SICK SCAN XD SDK (Multiscan MRS1000), requires SICK SDK to be installed")
 set(MANDEYE_USE_HESAI_SDK2 OFF CACHE BOOL "Use Hesai SDK2 (PandarXT/GT)")
+set(MANDEYE_USE_UNITREE_SDK OFF CACHE BOOL "Use Unitree unilidar_sdk2 (L2)")
 
 # NMEA and libserial
 find_path(LIBSERIAL_INCLUDE_DIR SerialPort.h
@@ -142,6 +143,27 @@ if (${MANDEYE_USE_HESAI_SDK2})
     install(TARGETS hesai_lib LIBRARY DESTINATION /opt/mandeye/)
     list(APPEND LIDAR_LIBRARIES hesai_lib)
     add_compile_definitions(MANDEYE_USE_HESAI_SDK2)
+endif()
+
+if (${MANDEYE_USE_UNITREE_SDK})
+    message("Unitree unilidar_sdk2")
+    # Unitree ships a prebuilt static library per architecture plus headers.
+    set(UNITREE_SDK_DIR 3rd/unilidar_sdk2/unitree_lidar_sdk)
+    find_library(UNITREE_SDK_LIBRARY
+            NAMES unilidar_sdk2
+            PATHS ${CMAKE_SOURCE_DIR}/${UNITREE_SDK_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR}
+            NO_DEFAULT_PATH)
+    if(NOT UNITREE_SDK_LIBRARY)
+        message(FATAL_ERROR "Unitree SDK prebuilt library not found for arch '${CMAKE_SYSTEM_PROCESSOR}' in ${UNITREE_SDK_DIR}/lib/")
+    endif()
+    add_library(unitree_lib SHARED
+            code/lidars/unitree/UnitreeClient.cpp
+    )
+    target_link_libraries(unitree_lib PRIVATE ${UNITREE_SDK_LIBRARY} pthread)
+    target_include_directories(unitree_lib PRIVATE ${UNITREE_SDK_DIR}/include)
+    install(TARGETS unitree_lib LIBRARY DESTINATION /opt/mandeye/)
+    list(APPEND LIDAR_LIBRARIES unitree_lib)
+    add_compile_definitions(MANDEYE_USE_UNITREE_SDK)
 endif()
 
 add_executable(control_program code/main.cpp code/gnss.cpp code/web_page.h

@@ -22,3 +22,6 @@
 [submodule "extras/oled_status/u8g8-arm"]
 	path = extras/oled_status/u8g8-arm
 	url = https://github.com/wuhanstudio/u8g2-arm-linux.git
+[submodule "3rd/unilidar_sdk2"]
+	path = 3rd/unilidar_sdk2
+	url = https://github.com/unitreerobotics/unilidar_sdk2.git
