@@ -148,13 +148,14 @@ endif()
 if (${MANDEYE_USE_UNITREE_SDK})
     message("Unitree unilidar_sdk2")
     # Unitree ships a prebuilt static library per architecture plus headers.
-    set(UNITREE_SDK_DIR 3rd/unilidar_sdk2/unitree_lidar_sdk)
-    find_library(UNITREE_SDK_LIBRARY
-            NAMES unilidar_sdk2
-            PATHS ${CMAKE_SOURCE_DIR}/${UNITREE_SDK_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR}
-            NO_DEFAULT_PATH)
-    if(NOT UNITREE_SDK_LIBRARY)
-        message(FATAL_ERROR "Unitree SDK prebuilt library not found for arch '${CMAKE_SYSTEM_PROCESSOR}' in ${UNITREE_SDK_DIR}/lib/")
+    set(UNITREE_SDK_DIR ${CMAKE_SOURCE_DIR}/3rd/unilidar_sdk2/unitree_lidar_sdk)
+    set(UNITREE_SDK_LIBRARY ${UNITREE_SDK_DIR}/lib/${CMAKE_SYSTEM_PROCESSOR}/libunilidar_sdk2.a)
+    if(NOT EXISTS ${UNITREE_SDK_LIBRARY})
+        message(FATAL_ERROR
+            "Unitree SDK prebuilt library not found:\n"
+            "  ${UNITREE_SDK_LIBRARY}\n"
+            "Make sure the submodule is checked out: 'git submodule update --init --recursive'\n"
+            "(detected arch CMAKE_SYSTEM_PROCESSOR='${CMAKE_SYSTEM_PROCESSOR}')")
     endif()
     add_library(unitree_lib SHARED
             code/lidars/unitree/UnitreeClient.cpp
