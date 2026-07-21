@@ -27,12 +27,29 @@ def timestamp():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
+def real_home():
+    """Home of the invoking user, even under sudo (so logs don't land in /root)."""
+    sudo_user = os.environ.get("SUDO_USER")
+    if sudo_user:
+        try:
+            import pwd
+            return pwd.getpwnam(sudo_user).pw_dir
+        except (ImportError, KeyError):
+            pass
+    return os.path.expanduser("~")
+
+
+DEFAULT_PORT = "/dev/ttyAMA0"  # GPIO14/15 UART on Pi 5 header pins 8/10
+DEFAULT_OUTDIR = os.path.join(real_home(), "mandeye_data", "uart_logs")
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="Timestamped UART logger (one line = one log entry).")
-    p.add_argument("--port", default="/dev/serial0", help="Serial device (default: /dev/serial0)")
+    p.add_argument("--port", default=DEFAULT_PORT, help=f"Serial device (default: {DEFAULT_PORT})")
     p.add_argument("--baud", type=int, default=115200, help="Baud rate (default: 115200)")
-    p.add_argument("--outdir", default="./uart_logs", help="Directory for log files (default: ./uart_logs)")
-    p.add_argument("--echo", action="store_true", help="Also print each line to stdout")
+    p.add_argument("--outdir", default=DEFAULT_OUTDIR, help=f"Directory for log files (default: {DEFAULT_OUTDIR})")
+    p.add_argument("--echo", action=argparse.BooleanOptionalAction, default=True,
+                   help="Print each line to stdout (default: on; use --no-echo to silence)")
     p.add_argument("--reconnect", action="store_true", help="Keep retrying if the port drops or is unavailable")
     return p.parse_args()
 
