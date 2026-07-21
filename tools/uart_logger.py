@@ -22,9 +22,22 @@ except ImportError:
     sys.exit("pyserial is required. Install with: pip3 install pyserial")
 
 
-def timestamp():
-    """Local time with millisecond precision, e.g. 2026-07-21 14:03:07.512"""
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+def make_timestamp(fmt):
+    """Return a no-arg function producing a timestamp string in the given format.
+
+    epoch_ns : Unix epoch nanoseconds (int) — matches the lidar recorder's
+               point/IMU timestamps exactly (system_clock ns since 1970 UTC).
+    epoch    : Unix epoch seconds with microseconds, e.g. 1753118570.694123
+    utc      : ISO-8601 UTC with milliseconds, e.g. 2026-07-21T14:42:50.694Z
+    local    : local wall-clock, e.g. 2026-07-21 16:42:50.694
+    """
+    if fmt == "epoch_ns":
+        return lambda: str(time.time_ns())
+    if fmt == "epoch":
+        return lambda: f"{time.time():.6f}"
+    if fmt == "utc":
+        return lambda: datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
 def real_home():
@@ -50,6 +63,8 @@ def parse_args():
     p.add_argument("--outdir", default=DEFAULT_OUTDIR, help=f"Directory for log files (default: {DEFAULT_OUTDIR})")
     p.add_argument("--echo", action=argparse.BooleanOptionalAction, default=True,
                    help="Print each line to stdout (default: on; use --no-echo to silence)")
+    p.add_argument("--time-format", choices=["epoch_ns", "epoch", "utc", "local"], default="epoch_ns",
+                   help="Timestamp format (default: epoch_ns — matches the lidar recorder's Unix ns timestamps)")
     p.add_argument("--reconnect", action="store_true", help="Keep retrying if the port drops or is unavailable")
     return p.parse_args()
 
@@ -61,6 +76,7 @@ def open_port(port, baud):
 
 def main():
     args = parse_args()
+    timestamp = make_timestamp(args.time_format)
 
     os.makedirs(args.outdir, exist_ok=True)
     session = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
