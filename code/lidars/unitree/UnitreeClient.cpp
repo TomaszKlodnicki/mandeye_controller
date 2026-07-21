@@ -41,6 +41,30 @@ nlohmann::json UnitreeClient::produceStatus()
 	return data;
 }
 
+bool UnitreeClient::isReadyToScan()
+{
+	std::lock_guard<std::mutex> lock(m_statusMutex);
+	// SDK must have finished init (rotation started, work mode set).
+	if(!m_initSuccess)
+	{
+		return false;
+	}
+	// Timestamps must be in sync (this also implies point data is flowing,
+	// since m_time_diff is only updated when point clouds arrive).
+	if(m_time_diff >= 1.0)
+	{
+		return false;
+	}
+	// Give the rotation a moment to stabilize after init so the first
+	// recorded frames aren't distorted by spin-up.
+	const auto elapsed = std::chrono::steady_clock::now() - m_initTime;
+	if(elapsed < std::chrono::duration<double>(kWarmupSeconds))
+	{
+		return false;
+	}
+	return true;
+}
+
 bool UnitreeClient::startListener(const std::string& interfaceIp)
 {
 	std::cout << "UnitreeClient: startListener called with interfaceIp: " << interfaceIp << std::endl;
@@ -121,6 +145,7 @@ void UnitreeClient::DataThreadFunction()
 		}
 		std::lock_guard<std::mutex> lock(m_statusMutex);
 		m_initSuccess = true;
+		m_initTime = std::chrono::steady_clock::now();
 	}
 
 	LidarImuData imu;

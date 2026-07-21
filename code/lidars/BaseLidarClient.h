@@ -79,6 +79,13 @@ public:
 	{
 		return false;
 	}
+
+	//! Whether the lidar is ready to begin a scan (e.g. warmed up / synced).
+	//! Defaults to always ready; lidars with a warm-up requirement override this.
+	virtual bool isReadyToScan()
+	{
+		return true;
+	}
 };
 
 } // namespace mandeye

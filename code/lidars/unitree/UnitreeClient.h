@@ -2,6 +2,7 @@
 
 #include "lidars/BaseLidarClient.h"
 #include <atomic>
+#include <chrono>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -58,6 +59,10 @@ public:
 		return m_time_diff < 1.0; // lidar reports time close to the computer's timestamp
 	}
 
+	//! Ready to scan once the SDK is initialized, time is synced, and the
+	//! rotation has had a moment to stabilize (avoids distorted first frames).
+	bool isReadyToScan() override;
+
 private:
 	void DataThreadFunction();
 
@@ -78,8 +83,13 @@ private:
 	std::atomic_int m_recivedPointMessages{0};
 	std::atomic_int m_recivedIMUMessages{0};
 
+	//! Seconds to wait after init before the lidar is considered ready to scan,
+	//! letting the rotation stabilize so the first recorded frames aren't distorted.
+	static constexpr double kWarmupSeconds{3.0};
+
 	std::mutex m_statusMutex;
 	bool m_initSuccess{false};
+	std::chrono::steady_clock::time_point m_initTime{}; // set once init completes (guarded by m_statusMutex)
 	std::string m_firmwareVersion;
 	std::string m_hardwareVersion;
 	std::string m_sdkVersion;

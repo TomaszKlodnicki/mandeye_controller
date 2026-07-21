@@ -108,6 +108,14 @@ bool StartScan()
 {
 	if(app_state == States::IDLE || app_state == States::STOPPED)
 	{
+		{
+			std::lock_guard<std::mutex> lock(lidarClientPtrLock);
+			if(lidarClientPtr && !lidarClientPtr->isReadyToScan())
+			{
+				std::cout << "StartScan rejected: lidar not ready to scan (warming up / not synced)" << std::endl;
+				return false;
+			}
+		}
 		app_state = States::STARTING_SCAN;
 		return true;
 	}
