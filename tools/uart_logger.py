@@ -87,45 +87,51 @@ def main():
     print("[uart_logger] Ctrl+C to stop")
 
     line_count = 0
-    with open(logpath, "a", encoding="utf-8") as logfile:
-        while True:
-            try:
-                ser = open_port(args.port, args.baud)
-            except serial.SerialException as e:
-                msg = f"{timestamp()}\t[uart_logger] cannot open {args.port}: {e}"
-                logfile.write(msg + "\n")
-                logfile.flush()
-                print(msg)
-                if not args.reconnect:
-                    return 1
-                time.sleep(2)
-                continue
+    last_open_err = None  # dedupe repeated "cannot open" spam while reconnecting
+    try:
+        with open(logpath, "a", encoding="utf-8") as logfile:
+            while True:
+                try:
+                    ser = open_port(args.port, args.baud)
+                except serial.SerialException as e:
+                    if str(e) != last_open_err:
+                        msg = f"{timestamp()}\t[uart_logger] cannot open {args.port}: {e}"
+                        logfile.write(msg + "\n")
+                        logfile.flush()
+                        print(msg)
+                        last_open_err = str(e)
+                    if not args.reconnect:
+                        return 1
+                    time.sleep(2)
+                    continue
 
-            try:
-                with ser:
-                    while True:
-                        raw = ser.readline()  # reads up to '\n' or until timeout
-                        if not raw:
-                            continue  # timeout, no data — loop and stay responsive to Ctrl+C
-                        text = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-                        entry = f"{timestamp()}\t{text}"
-                        logfile.write(entry + "\n")
-                        logfile.flush()  # persist immediately so nothing is lost on power cut
-                        line_count += 1
-                        if args.echo:
-                            print(entry)
-            except serial.SerialException as e:
-                msg = f"{timestamp()}\t[uart_logger] serial error: {e}"
-                logfile.write(msg + "\n")
-                logfile.flush()
-                print(msg)
-                if not args.reconnect:
-                    return 1
-                time.sleep(2)
-                # loop back and reopen
-            except KeyboardInterrupt:
-                print(f"\n[uart_logger] stopped. {line_count} lines written to {logpath}")
-                return 0
+                last_open_err = None
+                try:
+                    with ser:
+                        while True:
+                            raw = ser.readline()  # reads up to '\n' or until timeout
+                            if not raw:
+                                continue  # timeout, no data — loop and stay responsive to Ctrl+C
+                            text = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                            entry = f"{timestamp()}\t{text}"
+                            logfile.write(entry + "\n")
+                            logfile.flush()  # persist immediately so nothing is lost on power cut
+                            line_count += 1
+                            if args.echo:
+                                print(entry)
+                except serial.SerialException as e:
+                    msg = f"{timestamp()}\t[uart_logger] serial error: {e}"
+                    logfile.write(msg + "\n")
+                    logfile.flush()
+                    print(msg)
+                    if not args.reconnect:
+                        return 1
+                    time.sleep(2)
+                    # loop back and reopen
+    except KeyboardInterrupt:
+        # Ctrl+C anywhere (reading, sleeping, or reopening) stops cleanly.
+        print(f"\n[uart_logger] stopped. {line_count} lines written to {logpath}")
+        return 0
 
 
 if __name__ == "__main__":

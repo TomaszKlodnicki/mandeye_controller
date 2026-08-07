@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mandeye — Measure</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --line: #2a2f3a; --fg: #e8eaed; --muted: #9aa4b2;
+    --accent: #4f8cff; --green: #34c759; --red: #ff453a; --amber: #ff9f0a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 16px/1.4 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--fg); -webkit-text-size-adjust: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header { padding: 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+  button {
+    font: inherit; font-weight: 600; color: #fff; border: none; border-radius: 12px;
+    padding: 16px; cursor: pointer; transition: filter .15s, opacity .15s;
+  }
+  button:active { filter: brightness(.85); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-start { background: var(--green); }
+  .btn-stop { background: var(--red); }
+  .btn-sys { background: #333844; }
+  .btn-sys.on { background: var(--accent); }
+  .big { font-size: 20px; padding: 22px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  .kv { display: flex; flex-direction: column; }
+  .kv .k { font-size: 12px; color: var(--muted); }
+  .kv .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.g { background: var(--green); } .dot.r { background: var(--red); } .dot.a { background: var(--amber); }
+  .state { font-size: 22px; font-weight: 700; }
+  .sessions { display: flex; flex-direction: column; gap: 8px; }
+  .sess { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          padding: 10px 12px; background: #14171d; border: 1px solid var(--line); border-radius: 10px; }
+  .sess .meta { min-width: 0; }
+  .sess .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .sub { font-size: 12px; color: var(--muted); }
+  .sess a { text-decoration: none; background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .muted { color: var(--muted); }
+  .banner { padding: 10px 14px; border-radius: 10px; font-size: 14px; display: none; }
+  .banner.err { display: block; background: #3a1d1d; color: #ffb4ae; border: 1px solid #5a2a2a; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:22px">🛰️</span>
+  <h1>Mandeye — Measure</h1>
+  <span id="sysPill" class="pill" style="margin-left:auto"><span class="dot" id="sysDot"></span><span id="sysLabel">…</span></span>
+</header>
+
+<div class="wrap">
+  <div id="err" class="banner err"></div>
+
+  <!-- System -->
+  <div class="card">
+    <h2>System</h2>
+    <div class="row">
+      <button id="sysStart" class="btn-sys" onclick="post('/api/system/start')">Start system</button>
+      <button id="sysStop" class="btn-sys" onclick="post('/api/system/stop')">Stop system</button>
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div class="kv"><span class="k">Controller</span><span class="v" id="ctrlState">—</span></div>
+      <div class="kv"><span class="k">UART logger</span><span class="v" id="uartState">—</span></div>
+    </div>
+  </div>
+
+  <!-- Measurement -->
+  <div class="card">
+    <h2>Measurement</h2>
+    <div class="state" id="scanState">—</div>
+    <div class="row" style="margin-top:14px">
+      <button id="scanStart" class="btn-start big" onclick="post('/api/scan/start')">▶ Start</button>
+      <button id="scanStop" class="btn-stop big" onclick="post('/api/scan/stop')">⏹ Stop</button>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="kv"><span class="k">Elapsed</span><span class="v" id="elapsed">—</span></div>
+      <div class="kv"><span class="k">Synced</span><span class="v"><span id="syncPill" class="pill"><span class="dot"></span><span>—</span></span></span></div>
+      <div class="kv"><span class="k">Lidar points</span><span class="v" id="cntLidar">—</span></div>
+      <div class="kv"><span class="k">IMU msgs</span><span class="v" id="cntImu">—</span></div>
+    </div>
+  </div>
+
+  <!-- Storage -->
+  <div class="card">
+    <h2>Storage</h2>
+    <div class="kv"><span class="k">Free space</span><span class="v" id="disk">—</span></div>
+    <div class="muted" id="repo" style="font-size:12px;margin-top:4px"></div>
+  </div>
+
+  <!-- Sessions -->
+  <div class="card">
+    <h2>Recorded data — download</h2>
+    <div class="sessions" id="sessions"><div class="muted">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let busy = false;
+
+function showErr(msg) {
+  const e = $("err");
+  if (msg) { e.textContent = msg; e.style.display = "block"; }
+  else { e.style.display = "none"; }
+}
+
+async function post(path) {
+  if (busy) return;
+  busy = true;
+  showErr("");
+  try {
+    const r = await fetch(path, { method: "POST" });
+    const j = await r.json();
+    if (!j.ok) showErr(j.error || ("Request failed: " + path));
+  } catch (e) {
+    showErr("Network error: " + e.message);
+  } finally {
+    busy = false;
+    refresh();
+    loadSessions();
+  }
+}
+
+function fmtBytes(n) {
+  if (n == null) return "—";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n >= 10 || i === 0 ? 0 : 1) + " " + u[i];
+}
+function fmtDur(s) {
+  s = Math.floor(s || 0);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(sec).padStart(2, "0");
+}
+
+// Recording (continuous scan). StartScan only proceeds from IDLE/STOPPED.
+const SCANNING_STATES = ["SCANNING", "STARTING_SCAN"];
+const CAN_START_STATES = ["IDLE", "STOPPED"];
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/status");
+    const s = await r.json();
+
+    const ctrlUp = s.controller_running;
+    const uartUp = s.uart_running;
+
+    // system pill
+    $("sysDot").className = "dot " + (ctrlUp ? "g" : "r");
+    $("sysLabel").textContent = ctrlUp ? "System up" : "System down";
+    $("sysStart").classList.toggle("on", ctrlUp);
+
+    $("ctrlState").textContent = ctrlUp ? (s.controller_managed ? "running (managed)" : "running") : "stopped";
+    $("uartState").textContent = uartUp ? "running" : "stopped";
+
+    const c = s.controller || {};
+    const state = c.state || (ctrlUp ? "…" : "OFFLINE");
+    $("scanState").textContent = state;
+    const scanning = SCANNING_STATES.includes(state);
+    $("scanState").style.color = scanning ? "var(--green)" : (state === "USB_IO_ERROR" ? "var(--red)" : "var(--fg)");
+
+    // sync
+    const synced = c.lidar && c.lidar.is_synced;
+    const sp = $("syncPill");
+    sp.querySelector(".dot").className = "dot " + (synced ? "g" : "a");
+    sp.querySelector("span:last-child").textContent = synced ? "yes" : "no";
+
+    const counters = (c.lidar && c.lidar.counters) || {};
+    $("cntLidar").textContent = counters.lidar != null ? counters.lidar.toLocaleString() : "—";
+    $("cntImu").textContent = counters.imu != null ? counters.imu.toLocaleString() : "—";
+
+    $("elapsed").textContent = scanning ? fmtDur(s.scan_elapsed_s) : "—";
+
+    $("disk").textContent = s.disk ? fmtBytes(s.disk.free) + " free" : "—";
+    $("repo").textContent = s.repo || "";
+
+    // buttons — mirror the controller's own guards
+    $("scanStart").disabled = !ctrlUp || !CAN_START_STATES.includes(state);
+    $("scanStop").disabled = !ctrlUp || !scanning;
+    $("sysStop").disabled = !ctrlUp && !uartUp;
+    $("sysStart").disabled = ctrlUp && uartUp;
+
+    showErr("");
+  } catch (e) {
+    $("sysDot").className = "dot r";
+    $("sysLabel").textContent = "app offline";
+  }
+}
+
+async function loadSessions() {
+  try {
+    const r = await fetch("/api/sessions");
+    const j = await r.json();
+    const box = $("sessions");
+    if (!j.sessions.length) { box.innerHTML = '<div class="muted">No recordings yet.</div>'; return; }
+    // newest first
+    j.sessions.sort((a, b) => b.mtime - a.mtime);
+    box.innerHTML = "";
+    for (const s of j.sessions) {
+      const el = document.createElement("div");
+      el.className = "sess";
+      const when = new Date(s.mtime * 1000).toLocaleString();
+      el.innerHTML =
+        `<div class="meta"><div class="name">${s.name}</div>` +
+        `<div class="sub">${fmtBytes(s.size_bytes)} · ${s.file_count} files · ${when}</div></div>` +
+        `<a href="/api/download?name=${encodeURIComponent(s.name)}">Download</a>`;
+      box.appendChild(el);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+refresh();
+loadSessions();
+setInterval(refresh, 1000);
+setInterval(loadSessions, 5000);
+</script>
+</body>
+</html>
