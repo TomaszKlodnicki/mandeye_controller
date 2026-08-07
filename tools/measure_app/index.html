@@ -22,6 +22,12 @@
   .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
   .row { display: flex; gap: 12px; }
   .row > * { flex: 1; }
+  label.k { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%; font: inherit; color: var(--fg); background: #14171d;
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  }
+  input[type=text]:disabled { opacity: .5; }
   button {
     font: inherit; font-weight: 600; color: #fff; border: none; border-radius: 12px;
     padding: 16px; cursor: pointer; transition: filter .15s, opacity .15s;
@@ -30,8 +36,6 @@
   button:disabled { opacity: .35; cursor: not-allowed; }
   .btn-start { background: var(--green); }
   .btn-stop { background: var(--red); }
-  .btn-sys { background: #333844; }
-  .btn-sys.on { background: var(--accent); }
   .big { font-size: 20px; padding: 22px; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
   .kv { display: flex; flex-direction: column; }
@@ -63,32 +67,26 @@
 <div class="wrap">
   <div id="err" class="banner err"></div>
 
-  <!-- System -->
-  <div class="card">
-    <h2>System</h2>
-    <div class="row">
-      <button id="sysStart" class="btn-sys" onclick="post('/api/system/start')">Start system</button>
-      <button id="sysStop" class="btn-sys" onclick="post('/api/system/stop')">Stop system</button>
-    </div>
-    <div class="grid" style="margin-top:14px">
-      <div class="kv"><span class="k">Controller</span><span class="v" id="ctrlState">—</span></div>
-      <div class="kv"><span class="k">UART logger</span><span class="v" id="uartState">—</span></div>
-    </div>
-  </div>
-
   <!-- Measurement -->
   <div class="card">
     <h2>Measurement</h2>
-    <div class="state" id="scanState">—</div>
+
+    <label class="k" for="testName">Test name</label>
+    <input type="text" id="testName" placeholder="e.g. warehouse_ground_floor" autocomplete="off">
+
+    <div class="state" id="scanState" style="margin-top:16px">—</div>
+
     <div class="row" style="margin-top:14px">
-      <button id="scanStart" class="btn-start big" onclick="post('/api/scan/start')">▶ Start</button>
-      <button id="scanStop" class="btn-stop big" onclick="post('/api/scan/stop')">⏹ Stop</button>
+      <button id="btnStart" class="btn-start big" onclick="startMeasure()">▶ Start</button>
+      <button id="btnStop" class="btn-stop big" onclick="stopMeasure()">⏹ Stop &amp; pack</button>
     </div>
+
     <div class="grid" style="margin-top:16px">
       <div class="kv"><span class="k">Elapsed</span><span class="v" id="elapsed">—</span></div>
       <div class="kv"><span class="k">Synced</span><span class="v"><span id="syncPill" class="pill"><span class="dot"></span><span>—</span></span></span></div>
       <div class="kv"><span class="k">Lidar points</span><span class="v" id="cntLidar">—</span></div>
       <div class="kv"><span class="k">IMU msgs</span><span class="v" id="cntImu">—</span></div>
+      <div class="kv"><span class="k">UART log lines</span><span class="v" id="uartLines">—</span></div>
     </div>
   </div>
 
@@ -99,7 +97,7 @@
     <div class="muted" id="repo" style="font-size:12px;margin-top:4px"></div>
   </div>
 
-  <!-- Sessions -->
+  <!-- Packaged tests -->
   <div class="card">
     <h2>Recorded data — download</h2>
     <div class="sessions" id="sessions"><div class="muted">Loading…</div></div>
@@ -116,14 +114,19 @@ function showErr(msg) {
   else { e.style.display = "none"; }
 }
 
-async function post(path) {
+async function apiPost(path, body) {
   if (busy) return;
   busy = true;
   showErr("");
   try {
-    const r = await fetch(path, { method: "POST" });
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
     const j = await r.json();
     if (!j.ok) showErr(j.error || ("Request failed: " + path));
+    return j;
   } catch (e) {
     showErr("Network error: " + e.message);
   } finally {
@@ -131,6 +134,16 @@ async function post(path) {
     refresh();
     loadSessions();
   }
+}
+
+function startMeasure() {
+  apiPost("/api/measure/start", { name: $("testName").value });
+}
+function stopMeasure() {
+  $("scanState").textContent = "PACKING…";
+  apiPost("/api/measure/stop").then((j) => {
+    if (j && j.ok) { $("testName").value = ""; loadSessions(); }
+  });
 }
 
 function fmtBytes(n) {
@@ -145,9 +158,7 @@ function fmtDur(s) {
   return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(sec).padStart(2, "0");
 }
 
-// Recording (continuous scan). StartScan only proceeds from IDLE/STOPPED.
 const SCANNING_STATES = ["SCANNING", "STARTING_SCAN"];
-const CAN_START_STATES = ["IDLE", "STOPPED"];
 
 async function refresh() {
   try {
@@ -155,21 +166,26 @@ async function refresh() {
     const s = await r.json();
 
     const ctrlUp = s.controller_running;
-    const uartUp = s.uart_running;
+    const arming = s.arming;
+    const running = ctrlUp || arming;   // a test is active (warming up or recording)
+    const c = s.controller || {};
+    const state = c.state || (ctrlUp ? "…" : "IDLE");
+    const scanning = SCANNING_STATES.includes(state);
 
     // system pill
-    $("sysDot").className = "dot " + (ctrlUp ? "g" : "r");
-    $("sysLabel").textContent = ctrlUp ? "System up" : "System down";
-    $("sysStart").classList.toggle("on", ctrlUp);
+    $("sysDot").className = "dot " + (running ? "g" : "r");
+    $("sysLabel").textContent = running ? "Recording" : "Idle";
 
-    $("ctrlState").textContent = ctrlUp ? (s.controller_managed ? "running (managed)" : "running") : "stopped";
-    $("uartState").textContent = uartUp ? "running" : "stopped";
+    // big state line
+    let label;
+    if (arming) label = "WARMING UP…";
+    else if (!ctrlUp) label = "READY";
+    else label = state;
+    $("scanState").textContent = label;
+    $("scanState").style.color =
+      scanning ? "var(--green)" : (state === "USB_IO_ERROR" || state === "LIDAR_ERROR" ? "var(--red)" : "var(--fg)");
 
-    const c = s.controller || {};
-    const state = c.state || (ctrlUp ? "…" : "OFFLINE");
-    $("scanState").textContent = state;
-    const scanning = SCANNING_STATES.includes(state);
-    $("scanState").style.color = scanning ? "var(--green)" : (state === "USB_IO_ERROR" ? "var(--red)" : "var(--fg)");
+    if (s.arming_error) showErr(s.arming_error);
 
     // sync
     const synced = c.lidar && c.lidar.is_synced;
@@ -180,19 +196,17 @@ async function refresh() {
     const counters = (c.lidar && c.lidar.counters) || {};
     $("cntLidar").textContent = counters.lidar != null ? counters.lidar.toLocaleString() : "—";
     $("cntImu").textContent = counters.imu != null ? counters.imu.toLocaleString() : "—";
-
-    $("elapsed").textContent = scanning ? fmtDur(s.scan_elapsed_s) : "—";
+    $("uartLines").textContent = (s.uart_log_lines != null && running) ? s.uart_log_lines.toLocaleString() : "—";
+    $("elapsed").textContent = scanning ? fmtDur(s.scan_elapsed_s) : (arming ? "…" : "—");
 
     $("disk").textContent = s.disk ? fmtBytes(s.disk.free) + " free" : "—";
     $("repo").textContent = s.repo || "";
 
-    // buttons — mirror the controller's own guards
-    $("scanStart").disabled = !ctrlUp || !CAN_START_STATES.includes(state);
-    $("scanStop").disabled = !ctrlUp || !scanning;
-    $("sysStop").disabled = !ctrlUp && !uartUp;
-    $("sysStart").disabled = ctrlUp && uartUp;
-
-    showErr("");
+    // buttons + input
+    $("btnStart").disabled = running;
+    $("btnStop").disabled = !running;
+    $("testName").disabled = running;
+    if (running && s.test_name && !$("testName").value) $("testName").value = s.test_name;
   } catch (e) {
     $("sysDot").className = "dot r";
     $("sysLabel").textContent = "app offline";
@@ -205,8 +219,7 @@ async function loadSessions() {
     const j = await r.json();
     const box = $("sessions");
     if (!j.sessions.length) { box.innerHTML = '<div class="muted">No recordings yet.</div>'; return; }
-    // newest first
-    j.sessions.sort((a, b) => b.mtime - a.mtime);
+    j.sessions.sort((a, b) => b.mtime - a.mtime);   // newest first
     box.innerHTML = "";
     for (const s of j.sessions) {
       const el = document.createElement("div");
@@ -214,7 +227,7 @@ async function loadSessions() {
       const when = new Date(s.mtime * 1000).toLocaleString();
       el.innerHTML =
         `<div class="meta"><div class="name">${s.name}</div>` +
-        `<div class="sub">${fmtBytes(s.size_bytes)} · ${s.file_count} files · ${when}</div></div>` +
+        `<div class="sub">${fmtBytes(s.size_bytes)} · ${when}</div></div>` +
         `<a href="/api/download?name=${encodeURIComponent(s.name)}">Download</a>`;
       box.appendChild(el);
     }
